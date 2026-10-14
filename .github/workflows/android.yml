@@ -1,0 +1,70 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the app shell
+        run: npm run build:mobile
+
+      - name: Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Add the Android project
+        run: npx cap add android
+
+      - name: Theme and notification permission
+        run: node scripts/patch-android.mjs
+
+      - name: Copy the web build in
+        run: npx cap sync android
+
+      - name: Assemble a debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk morrow.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: morrow-apk
+          path: morrow.apk
+          if-no-files-found: error
+
+      - name: Publish a release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.${{ github.run_number }}
+          name: Morrow ${{ github.run_number }}
+          prerelease: true
+          make_latest: true
+          files: morrow.apk
+          body: |
+            Sideload build of Morrow. Allow installs from unknown sources, then open morrow.apk.
+            Signed with the debug key. Not a Play Store release.
