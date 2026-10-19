@@ -1,3 +1,5 @@
+import { formatCount } from "@/lib/time";
+
 export const TAGS = [
   { id: "focus", label: "Focus" },
   { id: "people", label: "People" },
@@ -6,8 +8,12 @@ export const TAGS = [
 
 export type TagId = (typeof TAGS)[number]["id"];
 
-export const DAWN_NOTE = "The day is given. What is it for?";
-export const DUSK_NOTE = "You can close the day. Or not. It refills at dawn.";
+export const DAWN_NOTE = "The purse is full. What is the day for?";
+export const DUSK_NOTE = "The night is for sleep. It refills at wake.";
+
+export function midNote(remaining: number): string {
+  return `${formatCount(remaining)} still yours.`;
+}
 
 export function tagLabel(id: TagId): string {
   return TAGS.find((tag) => tag.id === id)?.label ?? "";

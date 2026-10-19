@@ -82,6 +82,32 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+.vessel {
+  position: relative;
+  height: 8.5rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--color-bone);
+  box-shadow: var(--shadow-sheet);
+}
+
+.vessel-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--color-accent);
+}
+
+.vessel-mark {
+  position: absolute;
+  right: 0.75rem;
+  left: 0.75rem;
+  height: 1px;
+  background: var(--color-fg);
+  opacity: 0.45;
+}
+
 .gold {
   display: flex;
   height: 3.5rem;

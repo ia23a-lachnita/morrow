@@ -13,8 +13,8 @@ export function Intro() {
       <p className="rise d2 mt-4 text-base">Given, not carried over.</p>
       <p className="rise d3 mt-6 text-pretty text-muted">
         Picture it as dollars that reset every morning, so you would spend them.
-        A day is that size in seconds. It is given in full when you name it.
-        Sleep does not put you behind.
+        A day is that size in seconds. It is already being spent, including on
+        sleep. The first time you look, you watch what has gone.
       </p>
       <div className="sticky bottom-0 mt-auto bg-bg pt-8 pb-safe">
         <button type="button" className="gold press" onClick={seeIntro}>

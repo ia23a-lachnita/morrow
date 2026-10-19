@@ -15,7 +15,7 @@ export function Notices() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
 
-  async function toggle(kind: "dawn" | "dusk") {
+  async function toggle(kind: "dawn" | "dusk" | "mid") {
     const next = !notices[kind];
     if (next && typeof Notification !== "undefined" && Notification.permission === "default") {
       setBusy(true);
@@ -41,18 +41,26 @@ export function Notices() {
       <h1 className="word mt-8 text-xl leading-none">Notices</h1>
       <p className="mt-4 text-pretty text-muted">
         These show while Morrow is open. Allow notifications if you want them
-        when it is in the background.
+        when it is in the background. Three moments, not a stream. A chime
+        every hour stops meaning anything.
       </p>
       <div className="mt-8 flex flex-col gap-4">
         <NoticeCard
-          title="Dawn"
+          title="Wake"
           body={DAWN_NOTE}
           on={notices.dawn}
           disabled={busy}
           onToggle={() => void toggle("dawn")}
         />
         <NoticeCard
-          title="Dusk"
+          title="Middle"
+          body="Once, halfway through the waking hours. Just the balance."
+          on={notices.mid}
+          disabled={busy}
+          onToggle={() => void toggle("mid")}
+        />
+        <NoticeCard
+          title="Sleep"
           body={DUSK_NOTE}
           on={notices.dusk}
           disabled={busy}

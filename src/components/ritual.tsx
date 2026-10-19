@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { DAWN_NOTE, DUSK_NOTE } from "@/lib/copy";
-import { useApp, useBoot, logFor } from "@/lib/store";
-import { dayBounds, dayKeyAt } from "@/lib/time";
+import { DAWN_NOTE, DUSK_NOTE, midNote } from "@/lib/copy";
+import { useApp, useBoot } from "@/lib/store";
+import { dayBounds, dayKeyAt, purse, sleepDelayMinutes } from "@/lib/time";
 
 function deliver(body: string) {
   const hidden = document.visibilityState === "hidden";
@@ -23,26 +23,39 @@ function deliver(body: string) {
 export function runRitual(now = new Date()) {
   const state = useApp.getState();
   if (!state.introSeen) return;
-  const { dawnHour, dawnMinute } = state;
+  const { dawnHour, dawnMinute, sleepHour, sleepMinute } = state;
   const key = dayKeyAt(now, dawnHour, dawnMinute);
-  const { start, end } = dayBounds(now, dawnHour, dawnMinute);
+  const { start } = dayBounds(now, dawnHour, dawnMinute);
+  const span = Math.max(1, dayBounds(now, dawnHour, dawnMinute).end.getTime() - start.getTime()) / 1000;
   const elapsed = (now.getTime() - start.getTime()) / 1000;
-  const remaining = (end.getTime() - now.getTime()) / 1000;
-  const log = logFor(state.days, key);
+  const account = purse(now, dawnHour, dawnMinute, sleepHour, sleepMinute);
   const fired = state.fired[key] ?? {};
-  const named = log.intention.trim().length > 0;
 
-  if (state.notices.dawn && !named && elapsed <= 20 * 60 && !fired.dawn) {
+  if (
+    state.notices.dawn &&
+    !fired.dawn &&
+    elapsed <= 30 * 60 &&
+    document.visibilityState === "hidden"
+  ) {
     state.markFired(key, "dawn");
     deliver(DAWN_NOTE);
     return;
   }
 
+  const afterWake = sleepDelayMinutes(dawnHour, dawnMinute, sleepHour, sleepMinute);
+  const midAt = ((afterWake / 2) / 1440) * span;
+  if (state.notices.mid && !fired.mid && Math.abs(elapsed - midAt) <= 15 * 60) {
+    state.markFired(key, "mid");
+    deliver(midNote(account.remaining));
+    return;
+  }
+
+  const sleepAt = (afterWake / 1440) * span;
   if (
     state.notices.dusk &&
-    remaining <= 2 * 60 * 60 &&
-    remaining >= 15 * 60 &&
-    !fired.dusk
+    !fired.dusk &&
+    elapsed >= sleepAt - 20 * 60 &&
+    elapsed < sleepAt + 10 * 60
   ) {
     state.markFired(key, "dusk");
     deliver(DUSK_NOTE);

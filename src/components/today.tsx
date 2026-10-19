@@ -1,17 +1,19 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Sheet } from "@/components/sheet";
 import { DAWN_NOTE, TAGS, tagLabel, type TagId } from "@/lib/copy";
 import { logFor, useApp, type Moment } from "@/lib/store";
 import {
+  FULL_DAY,
   dayKeyAt,
-  figure,
   formatClock,
   formatCount,
+  purse,
   recentDayKeys,
   weekdayLetter,
 } from "@/lib/time";
 import { useNow } from "@/lib/use-now";
+import { useWitness, latchOpening } from "@/lib/use-witness";
 
 type Which = "name" | "moment" | "dawn" | null;
 
@@ -19,6 +21,10 @@ export function Today() {
   const now = useNow();
   const dawnHour = useApp((s) => s.dawnHour);
   const dawnMinute = useApp((s) => s.dawnMinute);
+  const sleepHour = useApp((s) => s.sleepHour);
+  const sleepMinute = useApp((s) => s.sleepMinute);
+  const seenAt = useApp((s) => s.seenAt);
+  const markSeen = useApp((s) => s.markSeen);
   const days = useApp((s) => s.days);
   const dawnOfferSeen = useApp((s) => s.dawnOfferSeen);
   const notices = useApp((s) => s.notices);
@@ -27,12 +33,34 @@ export function Today() {
   const removeMoment = useApp((s) => s.removeMoment);
   const closeDay = useApp((s) => s.closeDay);
   const setDawn = useApp((s) => s.setDawn);
+  const setSleep = useApp((s) => s.setSleep);
   const dismissDawnOffer = useApp((s) => s.dismissDawnOffer);
   const setNotice = useApp((s) => s.setNotice);
 
   const key = dayKeyAt(now, dawnHour, dawnMinute);
   const log = logFor(days, key);
-  const balance = figure(now, log.begunAt);
+  const account = purse(now, dawnHour, dawnMinute, sleepHour, sleepMinute);
+  const openedAt = useMemo(() => {
+    if (seenAt == null) return FULL_DAY;
+    const seenKey = dayKeyAt(new Date(seenAt), dawnHour, dawnMinute);
+    if (seenKey !== key) return FULL_DAY;
+    return purse(new Date(seenAt), dawnHour, dawnMinute, sleepHour, sleepMinute).remaining;
+  }, [key, dawnHour, dawnMinute, sleepHour, sleepMinute, seenAt]);
+  const from = latchOpening(key, openedAt);
+  const { value, draining } = useWitness(from, account.remaining, key);
+  useEffect(() => {
+    const stamp = () => markSeen(Date.now());
+    const onVis = () => {
+      if (document.visibilityState === "hidden") stamp();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", stamp);
+    return () => {
+      stamp();
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", stamp);
+    };
+  }, [markSeen]);
   const named = log.intention.trim().length > 0;
   const [sheet, setSheet] = useState<Which>(null);
   const [showAll, setShowAll] = useState(false);
@@ -42,7 +70,15 @@ export function Today() {
   }, [key]);
 
   const shown = showAll ? log.moments : log.moments.slice(0, 3);
-  const minuteBucket = Math.floor(balance.value / 60);
+  const minuteBucket = Math.floor(account.remaining / 60);
+  const lived = FULL_DAY - value;
+  const caption = draining
+    ? "Already in the day."
+    : account.remaining <= 0
+      ? "It refills at wake."
+      : account.inSleep
+        ? "The night is for sleep."
+        : "Still yours.";
   const offer = named && !dawnOfferSeen && !notices.dawn;
   const keys = recentDayKeys(now, dawnHour, dawnMinute);
 
@@ -66,10 +102,11 @@ export function Today() {
 
       <button
         type="button"
-        className="mt-8 h-11 self-start text-left text-base text-muted"
+        className="mt-8 self-start text-left text-base text-muted"
         onClick={() => setSheet("dawn")}
       >
-        Refills at {formatClock(dawnHour, dawnMinute)}
+        <span className="block">Refills at {formatClock(dawnHour, dawnMinute)}</span>
+        <span className="mt-1 block">Sleep at {formatClock(sleepHour, sleepMinute)}</span>
       </button>
 
       <button
@@ -85,11 +122,23 @@ export function Today() {
       </button>
 
       <p className="balance-num mt-10" aria-hidden="true">
-        {formatCount(balance.value)}
+        {formatCount(value)}
       </p>
-      <p className="mt-4 text-base">{balance.caption}</p>
+      <div
+        className="vessel mt-6"
+        role="img"
+        aria-label={`${formatCount(lived)} seconds already lived. ${formatCount(value)} still yours. The line marks sleep.`}
+      >
+        <div className="vessel-fill" style={{ height: `${(value / FULL_DAY) * 100}%` }} />
+        <div
+          className="vessel-mark"
+          style={{ bottom: `${(account.sleepSeconds / FULL_DAY) * 100}%` }}
+        />
+      </div>
+      <p className="mt-3 text-muted">{formatCount(lived)} already lived. The line is sleep.</p>
+      <p className="mt-4 text-base">{caption}</p>
       <p className="sr-only" aria-live="polite">
-        {formatCount(minuteBucket * 60)} seconds. {balance.caption}
+        {formatCount(minuteBucket * 60)} seconds. {caption}
       </p>
 
       <section className="mt-10">
@@ -202,9 +251,12 @@ export function Today() {
         open={sheet === "dawn"}
         hour={dawnHour}
         minute={dawnMinute}
+        sleepHour={sleepHour}
+        sleepMinute={sleepMinute}
         onClose={() => setSheet(null)}
-        onSave={(hour, minute) => {
+        onSave={(hour, minute, sleepH, sleepM) => {
           setDawn(hour, minute);
+          setSleep(sleepH, sleepM);
           setSheet(null);
         }}
       />
@@ -379,59 +431,88 @@ function DawnSheet({
   open,
   hour,
   minute,
+  sleepHour,
+  sleepMinute,
   onClose,
   onSave,
 }: {
   open: boolean;
   hour: number;
   minute: number;
+  sleepHour: number;
+  sleepMinute: number;
   onClose: () => void;
-  onSave: (hour: number, minute: number) => void;
+  onSave: (hour: number, minute: number, sleepHour: number, sleepMinute: number) => void;
 }) {
   const [h, setH] = useState(hour);
   const [m, setM] = useState(minute);
+  const [sh, setSh] = useState(sleepHour);
+  const [sm, setSm] = useState(sleepMinute);
   useEffect(() => {
     if (open) {
       setH(hour);
       setM(minute);
+      setSh(sleepHour);
+      setSm(sleepMinute);
     }
-  }, [open, hour, minute]);
+  }, [open, hour, minute, sleepHour, sleepMinute]);
 
   return (
-    <Sheet open={open} title="Dawn" onClose={onClose}>
-      <p className="text-pretty text-muted">The day refills at this time. Not at midnight.</p>
-      <p className="nums mt-6 text-center text-3xl">{formatClock(h, m)}</p>
-      <div className="mt-6 flex flex-col gap-2">
-        <div className="flex gap-2">
-          <Step label="Earlier hour" onClick={() => setH((value) => (value + 23) % 24)}>
-            Hour earlier
-          </Step>
-          <Step label="Later hour" onClick={() => setH((value) => (value + 1) % 24)}>
-            Hour later
-          </Step>
-        </div>
-        <div className="flex gap-2">
-          <Step label="Earlier minutes" onClick={() => setM((value) => bumpMinute(value, -1))}>
-            Minutes earlier
-          </Step>
-          <Step label="Later minutes" onClick={() => setM((value) => bumpMinute(value, 1))}>
-            Minutes later
-          </Step>
-        </div>
-      </div>
-      <button type="button" className="gold press mt-4" onClick={() => onSave(h, m)}>
-        Save dawn
+    <Sheet open={open} title="Wake and sleep" onClose={onClose}>
+      <p className="text-pretty text-muted">
+        The purse refills at wake, not at midnight. From sleep until the next
+        wake, it is spent resting. That part is not lost, and it is not a debt.
+      </p>
+      <p className="mt-6 text-base">Wake</p>
+      <p className="nums mt-2 text-center text-3xl">{formatClock(h, m)}</p>
+      <ClockSteps
+        onHour={(dir) => setH((value) => (value + dir + 24) % 24)}
+        onMinute={(dir) => setM((value) => bumpMinute(value, dir))}
+      />
+      <p className="mt-6 text-base">Sleep</p>
+      <p className="nums mt-2 text-center text-3xl">{formatClock(sh, sm)}</p>
+      <ClockSteps
+        onHour={(dir) => setSh((value) => (value + dir + 24) % 24)}
+        onMinute={(dir) => setSm((value) => bumpMinute(value, dir))}
+      />
+      <button type="button" className="gold press mt-4" onClick={() => onSave(h, m, sh, sm)}>
+        Save
       </button>
-      <Link
-        to="/notices"
-        className="mt-2 flex h-11 items-center justify-center text-muted"
-      >
+      <Link to="/notices" className="mt-2 flex h-11 items-center justify-center text-muted">
         Notices
       </Link>
     </Sheet>
   );
 }
 
+function ClockSteps({
+  onHour,
+  onMinute,
+}: {
+  onHour: (dir: 1 | -1) => void;
+  onMinute: (dir: 1 | -1) => void;
+}) {
+  return (
+    <div className="mt-4 flex flex-col gap-2">
+      <div className="flex gap-2">
+        <Step label="Earlier hour" onClick={() => onHour(-1)}>
+          Hour earlier
+        </Step>
+        <Step label="Later hour" onClick={() => onHour(1)}>
+          Hour later
+        </Step>
+      </div>
+      <div className="flex gap-2">
+        <Step label="Earlier minutes" onClick={() => onMinute(-1)}>
+          Minutes earlier
+        </Step>
+        <Step label="Later minutes" onClick={() => onMinute(1)}>
+          Minutes later
+        </Step>
+      </div>
+    </div>
+  );
+}
 function bumpMinute(value: number, dir: 1 | -1): number {
   const snapped = Math.round(value / 5) * 5;
   return (snapped + dir * 5 + 60) % 60;

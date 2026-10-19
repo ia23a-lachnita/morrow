@@ -16,7 +16,7 @@ export type DayLog = {
   close: string | null;
 };
 
-type NoticeKind = "dawn" | "dusk";
+type NoticeKind = "dawn" | "dusk" | "mid";
 
 type Fired = Partial<Record<NoticeKind, boolean>>;
 
@@ -24,12 +24,17 @@ type AppState = {
   introSeen: boolean;
   dawnHour: number;
   dawnMinute: number;
+  sleepHour: number;
+  sleepMinute: number;
+  seenAt: number | null;
   days: Record<string, DayLog>;
   notices: Record<NoticeKind, boolean>;
   dawnOfferSeen: boolean;
   fired: Record<string, Fired>;
   seeIntro: () => void;
   setDawn: (hour: number, minute: number) => void;
+  setSleep: (hour: number, minute: number) => void;
+  markSeen: (at: number) => void;
   saveIntention: (text: string, now?: Date) => void;
   addMoment: (name: string, tag: TagId | null, now?: Date) => boolean;
   removeMoment: (id: string, now?: Date) => void;
@@ -75,13 +80,18 @@ export const useApp = create<AppState>()(
       introSeen: false,
       dawnHour: 6,
       dawnMinute: 0,
+      sleepHour: 23,
+      sleepMinute: 0,
+      seenAt: null,
       days: {},
-      notices: { dawn: false, dusk: false },
+      notices: { dawn: false, dusk: false, mid: false },
       dawnOfferSeen: false,
       fired: {},
       seeIntro: () => set({ introSeen: true }),
       replayIntro: () => set({ introSeen: false }),
       setDawn: (hour, minute) => set({ dawnHour: hour, dawnMinute: minute }),
+      setSleep: (hour, minute) => set({ sleepHour: hour, sleepMinute: minute }),
+      markSeen: (at) => set({ seenAt: at }),
       dismissDawnOffer: () => set({ dawnOfferSeen: true }),
       setNotice: (kind, on) =>
         set({ notices: { ...get().notices, [kind]: on } }),
@@ -164,7 +174,23 @@ export const useApp = create<AppState>()(
         typeof window === "undefined" ? memoryStorage() : localStorage,
       ),
       skipHydration: true,
-      version: 1,
+      version: 2,
+      migrate: (persisted, version) => {
+        if (version >= 2) return persisted as AppState;
+        const state = persisted as Partial<AppState>;
+        const notices = state.notices;
+        return {
+          ...state,
+          sleepHour: 23,
+          sleepMinute: 0,
+          seenAt: null,
+          notices: {
+            dawn: notices?.dawn ?? false,
+            dusk: notices?.dusk ?? false,
+            mid: notices?.mid ?? false,
+          },
+        } as AppState;
+      },
     },
   ),
 );

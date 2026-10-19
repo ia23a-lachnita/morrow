@@ -59,13 +59,43 @@ export function recentDayKeys(
   return keys;
 }
 
-export function figure(
+export type Purse = {
+  remaining: number;
+  lived: number;
+  sleepSeconds: number;
+  wakingLeft: number;
+  inSleep: boolean;
+};
+
+export function purse(
   now: Date,
-  begunAt: number | null,
-): { value: number; caption: string } {
-  if (begunAt == null) return { value: FULL_DAY, caption: "Funded." };
-  const elapsed = Math.floor((now.getTime() - begunAt) / 1000);
-  const value = Math.max(0, FULL_DAY - elapsed);
-  if (value === 0) return { value: 0, caption: "It refills at dawn." };
-  return { value, caption: "Still yours." };
+  wakeH: number,
+  wakeM: number,
+  sleepH: number,
+  sleepM: number,
+): Purse {
+  const { start, end } = dayBounds(now, wakeH, wakeM);
+  const span = Math.max(1, (end.getTime() - start.getTime()) / 1000);
+  const elapsed = Math.min(span, Math.max(0, (now.getTime() - start.getTime()) / 1000));
+  const remaining = Math.max(0, Math.round(FULL_DAY * (1 - elapsed / span)));
+  const lived = FULL_DAY - remaining;
+  const afterWake = sleepDelayMinutes(wakeH, wakeM, sleepH, sleepM);
+  const sleepSeconds = Math.round(((1440 - afterWake) / 1440) * FULL_DAY);
+  const inSleep = elapsed >= (afterWake / 1440) * span;
+  const wakingLeft = inSleep ? 0 : Math.max(0, remaining - sleepSeconds);
+  return { remaining, lived, sleepSeconds, wakingLeft, inSleep };
 }
+
+/** Minutes after wake when sleep starts. At least an hour of day stays waking. */
+export function sleepDelayMinutes(
+  wakeH: number,
+  wakeM: number,
+  sleepH: number,
+  sleepM: number,
+): number {
+  const wake = wakeH * 60 + wakeM;
+  const sleep = sleepH * 60 + sleepM;
+  const delta = (sleep - wake + 1440) % 1440;
+  return delta < 60 ? 16 * 60 : delta;
+}
+

@@ -9,9 +9,11 @@ export function HomeSkeleton() {
         <h1 className="word text-xl leading-none">Morrow</h1>
       </header>
       <div className="bone mt-8 h-4 w-40" />
+      <div className="bone mt-3 h-4 w-36" />
       <div className="bone mt-4 h-5 w-56" />
       <div className="bone mt-10 h-20 w-60" />
-      <div className="bone mt-4 h-4 w-28" />
+      <div className="bone mt-6 h-32 w-full" />
+      <div className="bone mt-4 h-4 w-48" />
       <div className="mt-10 space-y-3">
         <div className="bone h-5 w-full" />
         <div className="bone h-5 w-4/5" />
