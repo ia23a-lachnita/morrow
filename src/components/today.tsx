@@ -1,7 +1,7 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Sheet } from "@/components/sheet";
-import { DAWN_NOTE, TAGS, tagLabel, type TagId } from "@/lib/copy";
+import { TAGS, tagLabel, type TagId } from "@/lib/copy";
 import { logFor, useApp, type Moment } from "@/lib/store";
 import {
   FULL_DAY,
@@ -10,6 +10,7 @@ import {
   formatCount,
   purse,
   recentDayKeys,
+  sleepClockFromFraction,
   weekdayLetter,
 } from "@/lib/time";
 import { useNow } from "@/lib/use-now";
@@ -64,6 +65,8 @@ export function Today() {
   const named = log.intention.trim().length > 0;
   const [sheet, setSheet] = useState<Which>(null);
   const [showAll, setShowAll] = useState(false);
+  const [dragFraction, setDragFraction] = useState<number | null>(null);
+  const vesselRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setShowAll(false);
@@ -79,8 +82,34 @@ export function Today() {
       : account.inSleep
         ? "The night is for sleep."
         : "Still yours.";
-  const offer = named && !dawnOfferSeen && !notices.dawn;
+  const sleepSeconds =
+    dragFraction == null ? account.sleepSeconds : Math.round(dragFraction * FULL_DAY);
+  const draggedSleep =
+    dragFraction == null
+      ? null
+      : sleepClockFromFraction(dawnHour, dawnMinute, dragFraction);
+
+  function fractionFromY(clientY: number): number | null {
+    const rect = vesselRef.current?.getBoundingClientRect();
+    if (!rect || rect.height === 0) return null;
+    const fromBottom = (rect.bottom - clientY) / rect.height;
+    return Math.min(18 / 24, Math.max(1 / 24, fromBottom));
+  }
+
+  function moveSleep(clientY: number) {
+    const next = fractionFromY(clientY);
+    if (next != null) setDragFraction(next);
+  }
+
+  function commitSleep(clientY: number) {
+    const next = fractionFromY(clientY);
+    setDragFraction(null);
+    if (next == null) return;
+    const clock = sleepClockFromFraction(dawnHour, dawnMinute, next);
+    setSleep(clock.hour, clock.minute);
+  }
   const keys = recentDayKeys(now, dawnHour, dawnMinute);
+  const offer = named && !dawnOfferSeen && !notices.dawn;
 
   async function allowDawn() {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -124,18 +153,30 @@ export function Today() {
       <p className="balance-num mt-10" aria-hidden="true">
         {formatCount(value)}
       </p>
-      <div
-        className="vessel mt-6"
-        role="img"
-        aria-label={`${formatCount(lived)} seconds already lived. ${formatCount(value)} still yours. The line marks sleep.`}
-      >
+      <div ref={vesselRef} className="vessel mt-6">
         <div className="vessel-fill" style={{ height: `${(value / FULL_DAY) * 100}%` }} />
-        <div
+        <button
+          type="button"
           className="vessel-mark"
-          style={{ bottom: `${(account.sleepSeconds / FULL_DAY) * 100}%` }}
+          style={{ bottom: `${(sleepSeconds / FULL_DAY) * 100}%` }}
+          aria-label={`Sleep at ${formatClock(draggedSleep?.hour ?? sleepHour, draggedSleep?.minute ?? sleepMinute)}. Drag to move it.`}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            moveSleep(event.clientY);
+          }}
+          onPointerMove={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) moveSleep(event.clientY);
+          }}
+          onPointerUp={(event) => commitSleep(event.clientY)}
+          onPointerCancel={() => setDragFraction(null)}
         />
       </div>
-      <p className="mt-3 text-muted">{formatCount(lived)} already lived. The line is sleep.</p>
+      <p className="mt-3 text-muted">
+        {formatCount(lived)} already lived.{" "}
+        {draggedSleep
+          ? `Sleep at ${formatClock(draggedSleep.hour, draggedSleep.minute)}`
+          : "Drag the line to set sleep."}
+      </p>
       <p className="mt-4 text-base">{caption}</p>
       <p className="sr-only" aria-live="polite">
         {formatCount(minuteBucket * 60)} seconds. {caption}
@@ -196,21 +237,18 @@ export function Today() {
             );
           })}
         </ol>
-        <p className="sr-only">
-          Seven dawns. An arch means the day was named. A line means rest.
-        </p>
-        <p className="mt-4 text-muted">Rest is part of the rhythm.</p>
+        <p className="mt-4 text-muted">An arch is a day you named. A line is rest.</p>
       </section>
 
       {offer ? (
         <div className="mt-8 border-t border-line pt-6">
-          <p className="text-pretty">{DAWN_NOTE}</p>
+          <p className="text-pretty">A note when the purse refills.</p>
           <p className="mt-2 text-pretty text-muted">
-            At your dawn, and only when today has no name.
+            It speaks only if that day has no name yet.
           </p>
           <div className="mt-3 flex gap-6">
             <button type="button" className="h-11 font-medium" onClick={() => void allowDawn()}>
-              Allow it
+              Allow the note
             </button>
             <button type="button" className="h-11 text-muted" onClick={dismissDawnOffer}>
               Not now

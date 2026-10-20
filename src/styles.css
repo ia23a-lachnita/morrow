@@ -96,16 +96,55 @@
   right: 0;
   bottom: 0;
   left: 0;
-  background: var(--color-accent);
+  background:
+    linear-gradient(180deg, rgb(243 237 226 / 0.42), transparent 14px),
+    linear-gradient(180deg, #e6cb9e 0%, var(--color-accent) 22%, #c6a56f 100%);
+}
+
+.vessel-fill::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: -40%;
+  width: 180%;
+  height: 14px;
+  border-radius: 50%;
+  background: rgb(243 237 226 / 0.28);
+  animation: tide 3.2s ease-in-out infinite;
 }
 
 .vessel-mark {
   position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 2.75rem;
+  margin-bottom: -1.375rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  touch-action: none;
+}
+
+.vessel-mark::after {
+  content: "";
+  position: absolute;
+  top: 50%;
   right: 0.75rem;
   left: 0.75rem;
   height: 1px;
   background: var(--color-fg);
-  opacity: 0.45;
+  opacity: 0.72;
+}
+
+@keyframes tide {
+  0%,
+  100% {
+    transform: translateX(-4%) scaleY(0.85);
+  }
+  50% {
+    transform: translateX(4%) scaleY(1.2);
+  }
 }
 
 .gold {

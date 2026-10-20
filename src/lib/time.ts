@@ -99,3 +99,16 @@ export function sleepDelayMinutes(
   return delta < 60 ? 16 * 60 : delta;
 }
 
+/** A line dragged up the purse, from the bottom. One hour of sleep up to eighteen. */
+export function sleepClockFromFraction(
+  wakeH: number,
+  wakeM: number,
+  fraction: number,
+): { hour: number; minute: number } {
+  const clamped = Math.min(18 / 24, Math.max(1 / 24, fraction));
+  const duration = Math.round((clamped * 1440) / 5) * 5;
+  const delay = 1440 - duration;
+  const clock = (wakeH * 60 + wakeM + delay) % 1440;
+  return { hour: Math.floor(clock / 60) % 24, minute: clock % 60 };
+}
+
